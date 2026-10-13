@@ -448,7 +448,7 @@ const Teams = {
             </div>
             ${!m.is_captain && t.status !== 'locked' ? `
             <button class="btn sm outline" title="设为队长" onclick="Teams.transfer('${id}','${m.user_id}')">转让</button>
-            <button class="btn sm outline" style="color:var(--coral)" onclick="Teams.kick('${id}','${m.user_id}','${UI.esc(m.user?.name || '')}')">移除</button>` : ''}
+            <button class="btn sm outline" style="color:var(--coral)" data-name="${UI.esc(m.user?.name || '')}" onclick="Teams.kick('${id}','${m.user_id}', event)">移除</button>` : ''}
           </div>`).join('')}
         </div>
 
@@ -541,7 +541,8 @@ const Teams = {
     };
   },
 
-  async kick(teamId, userId, name) {
+  async kick(teamId, userId, ev) {
+    const name = UI.eventText(ev, 'name');
     const ok = await UI.confirm(`确定将「${name}」移出队伍吗？`, { okText: '移除', danger: true });
     if (!ok) return;
     try {

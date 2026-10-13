@@ -74,6 +74,10 @@ function requireAdmin(req, res, next) {
 }
 
 // ---------- 校验 ----------
+// 姓名白名单：中日韩汉字（含扩展 A 与兼容区）、拉丁字母、数字、半/全角空格、间隔号、长音符、连字符、句点。
+// 姓名会被拼进管理后台的操作文案，必须挡住引号、尖括号、反引号等能改写 JS 源码的字符。
+const NAME_RE = /^[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFFa-zA-Z0-9 \u3000·・ー.\-]+$/;
+
 function validateProfile(body, { partial = false } = {}) {
   const errors = [];
   const out = {};
@@ -81,6 +85,7 @@ function validateProfile(body, { partial = false } = {}) {
   if (!partial || body.name !== undefined) {
     const name = String(body.name || '').trim();
     if (name.length < 2 || name.length > 20) errors.push('姓名需 2-20 个字符');
+    else if (!NAME_RE.test(name)) errors.push('姓名含不支持的字符（仅限中英文、数字、空格与间隔号）');
     out.name = name;
   }
   if (!partial || body.student_id !== undefined) {
@@ -283,4 +288,4 @@ function publicUser(u, { own = false, viewer = null, revealContact = false } = {
   return base;
 }
 
-module.exports = { router, attachUser, requireAuth, requireAdmin, publicUser, hashPassword, validateProfile };
+module.exports = { router, attachUser, requireAuth, requireAdmin, publicUser, hashPassword, validateProfile, NAME_RE };

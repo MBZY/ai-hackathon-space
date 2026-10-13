@@ -13,6 +13,13 @@ const UI = {
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   },
 
+  // 用户数据只经 data-* 属性传给内联事件处理器，禁止拼进 onclick 的 JS 源码：
+  // HTML 属性在解析时会先被解码，再交给 JS 引擎，所以 UI.esc 挡不住 JS 字符串逃逸。
+  eventText(ev, key) {
+    const el = ev && ev.currentTarget;
+    return (el && el.dataset && el.dataset[key]) || '';
+  },
+
   async api(path, { method = 'GET', body } = {}) {
     let res;
     try {

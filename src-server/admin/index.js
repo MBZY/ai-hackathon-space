@@ -4,7 +4,7 @@
 const express = require('express');
 const { getDb, save, uid, DB_FILE } = require('../store');
 const config = require('../config');
-const { requireAdmin, hashPassword } = require('../auth');
+const { requireAdmin, hashPassword, NAME_RE } = require('../auth');
 const { activeMembers, nowTeamStatus, notify } = require('../teams');
 const { badRequest, notFound } = require('../errors');
 const crypto = require('crypto');
@@ -189,6 +189,10 @@ router.post('/import-users', (req, res) => {
 
     if (!name || name.length < 2) {
       result.invalid.push({ row, name, student_id: sid, reason: '姓名缺失或少于 2 字' });
+      continue;
+    }
+    if (!NAME_RE.test(name)) {
+      result.invalid.push({ row, name, student_id: sid, reason: '姓名含不支持的字符（仅限中英文、数字、空格与间隔号）' });
       continue;
     }
     if (!/^\d{8,15}$/.test(sid)) {

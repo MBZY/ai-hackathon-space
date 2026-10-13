@@ -69,7 +69,8 @@ router.put('/me', requireAuth, (req, res) => {
 
   // 允许更新的字段（学号不可改）
   const patch = {};
-  if (body.name !== undefined) patch.name = body.name;
+  // 姓名未变更时不重复校验，避免历史数据里的特殊字符把资料编辑锁死
+  if (body.name !== undefined && String(body.name).trim() !== String(me.name || '').trim()) patch.name = body.name;
   if (body.college !== undefined) patch.college = body.college;
   if (body.major !== undefined) patch.major = body.major;
   if (body.grade !== undefined) patch.grade = body.grade;

@@ -131,5 +131,6 @@ git push -u origin feat/你的功能
 | `test-regmode.js` | 问卷制 + 审核 + 导入（33 项） | 直接运行（自起隔离实例） |
 | `test-features.js` | 进度配图 / 作品 / 瀑布流（21 项） | 直接运行 |
 | `test-apply-flow.js` | 申请·审批 + 联系方式可见性（53 项） | 直接运行 |
+| `test-xss.js` | 姓名白名单（XSS 纵深防御，17 项） | 直接运行 |
 | `ui-apply-check.js` | 申请·审批 + 名片卡 UI 全流程（28 项，puppeteer） | 直接运行（真实数据副本隔离） |
 | `check-survey-ui.js` / `scan-*.js` | 问卷制 UI / 全站宽度溢出扫描 | 直接运行 |

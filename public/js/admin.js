@@ -123,7 +123,7 @@ const Admin = {
           <td>${u.team_name ? UI.esc(u.team_name) : '<span class="tag coral">未组队</span>'}</td>
           <td style="white-space:nowrap">
             ${u.role === 'admin' ? `<button class="btn sm outline" onclick="Admin.setRole('${u.id}','user')">取消管理员</button>` : `<button class="btn sm outline" onclick="Admin.setRole('${u.id}','admin')">设为赛务组</button>`}
-            <button class="btn sm outline" onclick="Admin.resetPwd('${u.id}','${UI.esc(u.name)}')">重置密码</button>
+            <button class="btn sm outline" data-name="${UI.esc(u.name)}" onclick="Admin.resetPwd('${u.id}', event)">重置密码</button>
           </td>
         </tr>`).join('')}
       </table>
@@ -306,15 +306,16 @@ const Admin = {
           <td style="font-size:12.5px;max-width:170px">${UI.esc((u.bio || '').slice(0, 50))}</td>
           <td style="font-size:12.5px;white-space:nowrap">${UI.fmtTime(u.created_at, { withDate: true })}</td>
           <td style="white-space:nowrap">
-            <button class="btn sm" onclick="Admin.approve('${u.id}','${UI.esc(u.name)}')">通过</button>
-            <button class="btn sm outline" style="color:var(--coral)" onclick="Admin.reject('${u.id}','${UI.esc(u.name)}')">拒绝</button>
+            <button class="btn sm" data-name="${UI.esc(u.name)}" onclick="Admin.approve('${u.id}', event)">通过</button>
+            <button class="btn sm outline" style="color:var(--coral)" data-name="${UI.esc(u.name)}" onclick="Admin.reject('${u.id}', event)">拒绝</button>
           </td>
         </tr>`).join('')}
       </table>
     </div>`}`;
   },
 
-  async approve(id, name) {
+  async approve(id, ev) {
+    const name = UI.eventText(ev, 'name');
     if (!(await UI.confirm(`通过「${name}」的报名申请？通过后对方即可登录。`, { okText: '通过' }))) return;
     try {
       await UI.api(`/api/admin/users/${id}/approve`, { method: 'POST' });
@@ -323,7 +324,8 @@ const Admin = {
     } catch (e) { UI.toast(e.message, 'err'); }
   },
 
-  async reject(id, name) {
+  async reject(id, ev) {
+    const name = UI.eventText(ev, 'name');
     if (!(await UI.confirm(`拒绝「${name}」的报名申请？对方将无法登录（可人工再联系）。`, { okText: '拒绝', danger: true }))) return;
     try {
       await UI.api(`/api/admin/users/${id}/reject`, { method: 'POST' });
@@ -392,7 +394,8 @@ const Admin = {
     try { await UI.api(`/api/admin/users/${id}/role`, { method: 'POST', body: { role } }); UI.toast('已更新', 'ok'); Admin.usersPage(UI.$('#view')); }
     catch (e) { UI.toast(e.message, 'err'); }
   },
-  async resetPwd(id, name) {
+  async resetPwd(id, ev) {
+    const name = UI.eventText(ev, 'name');
     if (!(await UI.confirm(`重置「${name}」的密码为学号后 6 位？`, { okText: '重置' }))) return;
     try {
       const r = await UI.api(`/api/admin/users/${id}/reset-password`, { method: 'POST' });
