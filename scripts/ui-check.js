@@ -20,15 +20,18 @@ const dbPath = path.join(__dirname, '..', 'data', 'db.json');
 let TEST_SID = process.env.TEST_SID || '';
 let CAPTAIN_SID = '';
 const TEST_PWD = process.env.TEST_PWD || 'pass123456';
-if (!TEST_SID) {
-  try {
-    const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+let ADMIN_HAS_TEAM = false; // 管理员 hero 按钮预期：按测试库中管理员的实际队伍状态判定
+try {
+  const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+  if (!TEST_SID) {
     const member = db.users.find((u) => u.name === '冒烟队员');
     const captain = db.users.find((u) => u.name === '冒烟队长');
     if (member) TEST_SID = member.student_id;
     if (captain) CAPTAIN_SID = captain.student_id;
-  } catch (e) { /* ignore */ }
-}
+  }
+  const admin = db.users.find((u) => u.student_id === '202440025279');
+  ADMIN_HAS_TEAM = !!admin && (db.team_members.some((m) => m.user_id === admin.id) || db.teams.some((t) => t.captain_id === admin.id));
+} catch (e) { /* ignore */ }
 
 let pass = 0;
 let fail = 0;
@@ -185,7 +188,7 @@ async function main() {
   const adminText = await page.$eval('#view', (el) => el.textContent).catch(() => '');
   check('后台总览渲染', adminText.includes('赛务后台') && adminText.includes('注册人数'));
   const adminTabs = await page.$$eval('.admin-tabs a', (els) => els.length).catch(() => 0);
-  check('后台 tab 渲染', adminTabs === 4, adminTabs);
+  check('后台 tab 渲染', adminTabs === 6, adminTabs);
   await shot('08-admin.png');
 
   // ---------- 8. 首页（登录态） ----------
@@ -193,7 +196,8 @@ async function main() {
   await gotoHash('#/');
   await sleep(400);
   const heroActions = await page.$eval('.hero-actions', (el) => el.textContent).catch(() => '');
-  check('登录后 hero 按钮正常（管理员无队伍→创建队伍）', heroActions.includes('创建队伍'), heroActions.trim());
+  const expectHeroBtn = ADMIN_HAS_TEAM ? '进入我的队伍' : '创建队伍';
+  check(`登录后 hero 按钮正常（${expectHeroBtn}）`, heroActions.includes(expectHeroBtn), heroActions.trim());
 
   // ---------- 9. Modal 开合（遮罩修复的配套验证） ----------
   console.log('\n[9] 弹窗模态开合');
