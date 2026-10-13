@@ -82,8 +82,11 @@ const App = {
           ${UI.avatar(UI.me.name, UI.me.id, 'sm')}
           <span class="uname" style="font-size:14px;color:var(--ink)">${UI.esc(UI.me.name)}</span>
         </a>
-        ${UI.me.role === 'admin' ? '<a class="tag" href="#/admin" style="cursor:pointer">后台</a>' : ''}`;
+        ${UI.me.role === 'admin' ? '<a class="tag" href="#/admin" style="cursor:pointer">后台</a>' : ''}
+        <button class="nav-logout" id="navLogout" title="退出登录">退出</button>`;
     }
+    const logoutBtn = UI.$('#navLogout');
+    if (logoutBtn) logoutBtn.onclick = () => Auth.logout();
     // 高亮当前导航
     const key = (location.hash || '#/').split('/')[1] || 'home';
     UI.$$('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === (key === '' ? 'home' : key)));

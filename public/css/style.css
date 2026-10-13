@@ -125,6 +125,8 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .nav-bell { position: relative; width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 17px; color: var(--ink-2); text-decoration: none !important; transition: border-color var(--dur-fast) ease-out, color var(--dur-fast) ease-out; }
 .nav-bell:hover { border-color: var(--green-line); color: var(--green); }
 .badge-dot { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 5px; background: var(--coral); color: #1d0a05; font-size: 10.5px; line-height: 17px; text-align: center; font-weight: 700; font-family: var(--mono); }
+.nav-logout { padding: 5px 9px; border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--ink-2); font-size: 14px; transition: color var(--dur-fast) ease-out, border-color var(--dur-fast) ease-out; }
+.nav-logout:hover { color: var(--coral); border-color: var(--line-2); }
 
 /* ==========================================================================
    布局
@@ -479,6 +481,8 @@ table.data th:first-child, table.data td:first-child { min-width: 110px; }
   .nav a { padding: 17px 9px 15px; font-size: 13.5px; white-space: nowrap; }
   .nav-right { flex: none; }
   .nav-right .uname { display: none; }
+  /* 窄屏顶部空间优先留给主导航，登出入口保留在「我的空间 → 账号安全」 */
+  .nav-logout { display: none; }
   .container { padding: 20px 14px 52px; }
   .hero { padding: 26px 20px 24px; }
   .hero h1 { font-size: 32px; }

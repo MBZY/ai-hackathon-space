@@ -174,6 +174,28 @@ const Auth = {
     };
   },
 
+  // 退出登录：先清服务端会话，再清前端状态。
+  // 请求失败时保持登录态，避免出现「界面已登出、刷新又登回来」的假登出（会话 cookie 是 HttpOnly，前端删不掉）。
+  async logout() {
+    if (!UI.me) return;
+    const ok = await UI.confirm('退出后需要重新登录才能组队、私信，确定退出吗？', { title: '退出登录', okText: '退出登录' });
+    if (!ok) return;
+    try {
+      await UI.api('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+      // 401 = 会话已过期，本来就没登录，按已登出处理；其余错误说明会话可能仍在，不能假装成功
+      if (e.status !== 401) { UI.toast(e.message || '退出失败，请重试', 'err'); return; }
+    }
+    UI.me = null;
+    App.unreadNotif = 0;
+    App.unreadMsg = 0;
+    if (App.notifTimer) { clearInterval(App.notifTimer); App.notifTimer = null; }
+    UI.toast('已退出登录', 'ok');
+    // 已在首页时 hash 不变，不会触发 hashchange，需手动重渲染成游客首页
+    if ((location.hash || '#/') === '#/') App.route();
+    else location.hash = '#/';
+  },
+
   // ---------- 我的空间 ----------
   async myPage(view) {
     if (!UI.me) { location.hash = '#/login'; return; }
@@ -267,6 +289,10 @@ const Auth = {
           <div class="form-item" style="flex:1;min-width:170px;margin:0"><label>新密码（至少 6 位）</label><input type="password" id="cpNew" maxlength="64" autocomplete="new-password"></div>
           <button class="btn outline" id="cpBtn">修改密码</button>
         </div>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <p style="font-size:13px;color:var(--ink-3);margin:0">在公共电脑上使用后，记得退出登录。</p>
+          <button class="btn outline sm" id="logoutBtn">退出登录</button>
+        </div>
       </div>`;
     Auth.bindProfileForm(me);
     UI.$('#cpBtn').onclick = async () => {
@@ -281,6 +307,7 @@ const Auth = {
         UI.toast('密码已修改，其他设备需重新登录', 'ok');
       } catch (e) { UI.toast(e.message, 'err'); }
     };
+    UI.$('#logoutBtn').onclick = () => Auth.logout();
   },
 
   profileFormHTML(me) {
