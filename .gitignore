@@ -9,6 +9,7 @@ node_modules/
 # ============================================================
 data/db.json
 data/db.json.*
+data/backups/
 data/*.backup
 data/*.backup.*
 data/*.corrupted.*
