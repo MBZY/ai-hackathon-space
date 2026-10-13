@@ -157,10 +157,22 @@ async function main() {
   const nameHit = await page.$eval('#pkList', (el) => el.textContent).catch(() => '');
   check('按学号搜到队长', nameHit.includes('冒烟队长'), nameHit.slice(0, 120));
 
-  // ---------- 7. 退出 + 管理员登录 ----------
-  console.log('\n[7] 管理后台');
-  await page.evaluate(() => fetch('/api/auth/logout', { method: 'POST' }));
-  await sleep(300);
+  // ---------- 7. 退出（点导航按钮）+ 管理员登录 ----------
+  console.log('\n[7] 退出登录 + 管理后台');
+  await page.click('#navLogout');
+  await sleep(250);
+  await page.click('#mOk'); // 确认弹窗
+  await sleep(700);
+  const afterLogout = await page.evaluate(async () => ({
+    hash: location.hash,
+    me: !!UI.me,
+    hasLoginEntry: !!document.querySelector('#navRight a[href="#/login"]'),
+    meStatus: (await fetch('/api/auth/me')).status,
+  }));
+  check('点「退出」后回到首页', afterLogout.hash === '#/', afterLogout.hash);
+  check('前端登录态已清空且导航显示登录入口', !afterLogout.me && afterLogout.hasLoginEntry, JSON.stringify(afterLogout));
+  check('服务端会话已失效（/api/auth/me 401）', afterLogout.meStatus === 401, afterLogout.meStatus);
+  await shot('07-logout.png');
   await gotoHash('#/login');
   await page.type('#loginSid', '202440025279', { delay: 10 });
   await page.type('#loginPwd', 'pass123456', { delay: 10 });
@@ -174,7 +186,7 @@ async function main() {
   check('后台总览渲染', adminText.includes('赛务后台') && adminText.includes('注册人数'));
   const adminTabs = await page.$$eval('.admin-tabs a', (els) => els.length).catch(() => 0);
   check('后台 tab 渲染', adminTabs === 4, adminTabs);
-  await shot('07-admin.png');
+  await shot('08-admin.png');
 
   // ---------- 8. 首页（登录态） ----------
   console.log('\n[8] 登录态首页');
@@ -191,7 +203,7 @@ async function main() {
     return { hidden: mask.hidden, display: getComputedStyle(mask).display };
   });
   check('modal 打开时遮罩正常可见', !modalOpen.hidden && modalOpen.display === 'flex', JSON.stringify(modalOpen));
-  await shot('08-modal-open.png');
+  await shot('09-modal-open.png');
   const modalClose = await page.evaluate(() => {
     UI.closeModal();
     const mask = document.querySelector('#modalMask');
