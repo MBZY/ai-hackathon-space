@@ -131,7 +131,16 @@ const Teams = {
 
     const myRole = t.my_role || 'guest';
     const isMember = myRole === 'captain' || myRole === 'member';
-    const canApply = UI.me && myRole === 'guest' && !UI.me.team_id && t.status === 'recruiting' && t.member_count < t.max_size;
+    const myPendingApply = t.my_pending_apply || null;
+    // 可申请：未入队 + 无待处理申请/邀请 + 招募中 + 未满员
+    const canApply = UI.me && myRole === 'guest' && !UI.me.team_id && !myPendingApply && !t.my_pending_invite
+      && t.status === 'recruiting' && t.member_count < t.max_size;
+    // 不能申请时给出原因（不再让按钮静默消失）
+    const applyHint = UI.me && myRole === 'guest' && !canApply && !myPendingApply && !t.my_pending_invite
+      ? (UI.me.team_id ? '你已加入其他队伍（一人一队）'
+        : t.member_count >= t.max_size ? '队伍已满员'
+        : t.status !== 'recruiting' ? '已停止招募' : '')
+      : '';
     const stageOpts = ['选题确认', '原型设计', '开发实现', '联调测试', '打磨提交'];
 
     view.innerHTML = `
@@ -140,9 +149,11 @@ const Teams = {
         <p class="sub"><span class="track-badge ${t.track}">${UI.esc(t.track_name)}</span>
           ${UI.statusTag(t.status)} <span class="tag gray">${t.member_count}/${t.max_size} 人</span>
           <span class="tag gray">创建于 ${UI.fmtDate(t.created_at)}</span></p></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         ${canApply ? `<button class="btn" id="btnApply">申请加入</button>` : ''}
-        ${UI.me && myRole === 'guest' && t.my_pending_invite ? `<button class="btn coral" onclick="Teams.respondInvite('${t.my_pending_invite.id}','accept')">接受邀请加入</button>` : ''}
+        ${myPendingApply ? `<span class="tag warn">已申请，等待队长处理</span><button class="btn sm outline" id="btnCancelApply">撤回申请</button>` : ''}
+        ${UI.me && myRole === 'guest' && t.my_pending_invite ? `<button class="btn coral" onclick="Teams.respondInvite('${t.my_pending_invite.id}','accept')">接受邀请加入</button><button class="btn outline" onclick="Teams.respondInvite('${t.my_pending_invite.id}','decline')">婉拒</button>` : ''}
+        ${applyHint ? `<span class="tag gray">${applyHint}</span>` : ''}
         ${myRole === 'captain' ? `<a class="btn outline" href="#/team/${t.id}/manage">队长管理</a>` : ''}
       </div>
     </div>
@@ -224,6 +235,9 @@ const Teams = {
     if (UI.$('#btnApply')) {
       UI.$('#btnApply').onclick = () => Teams.applyModal(t);
     }
+    if (UI.$('#btnCancelApply')) {
+      UI.$('#btnCancelApply').onclick = () => Teams.cancelApply(myPendingApply.id, id);
+    }
     if (UI.$('#btnSubmitProject')) UI.$('#btnSubmitProject').onclick = () => Teams.projectModal(t, () => Teams.detailPage(view, id));
     if (UI.$('#btnEditProject')) UI.$('#btnEditProject').onclick = () => Teams.projectModal(t, () => Teams.detailPage(view, id));
     // 进度配图选择（最多 3 张，客户端压缩）
@@ -280,6 +294,7 @@ const Teams = {
       <div class="form-item"><label>期望分工<span class="req">*</span></label>
         <select id="apRole">${['产品','前端','后端','美术','策划','宣发','测试'].map((r) => `<option>${r}</option>`).join('')}</select></div>
       <div class="form-item"><label>自荐语</label><textarea id="apMsg" maxlength="200" placeholder="让队长更快了解你（技能、经验、热情）"></textarea></div>
+      <p class="form-hint">提交后队长将看到你的名片与联系方式（便于沟通）；处理结果会通过站内通知告知你。</p>
       <div class="modal-actions">
         <button class="btn outline" onclick="UI.closeModal()">取消</button>
         <button class="btn" id="apSubmit">提交申请</button>
@@ -295,6 +310,17 @@ const Teams = {
         Teams.detailPage(UI.$('#view'), t.id);
       } catch (e) { UI.toast(e.message, 'err'); }
     };
+  },
+
+  // 撤回自己发出的入队申请
+  async cancelApply(invId, teamId) {
+    const ok = await UI.confirm('撤回加入该队伍的申请吗？', { okText: '撤回' });
+    if (!ok) return;
+    try {
+      await UI.api(`/api/teams/invites/${invId}/cancel`, { method: 'POST' });
+      UI.toast('已撤回申请', 'ok');
+      Teams.detailPage(UI.$('#view'), teamId);
+    } catch (e) { UI.toast(e.message, 'err'); }
   },
 
   // ---------- 作品提交弹窗（队长） ----------
@@ -378,13 +404,26 @@ const Teams = {
               <span class="tag gray">${UI.esc(a.user?.ai_level || '')}</span>
             </div>
             <div style="font-size:13px;color:var(--ink-2);margin:6px 0">${UI.esc(a.message || '（无自荐语）')}</div>
+            ${a.user?.bio ? `<div style="font-size:12.5px;color:var(--ink-3);margin-bottom:4px">一句话自荐：${UI.esc(a.user.bio)}</div>` : ''}
             <div style="font-size:12.5px;color:var(--ink-3)">技能：${UI.esc((a.user?.skills || []).join(' / ') || '未填')} ｜ 联系：${UI.esc(a.user?.contact || '未填')}</div>
+            <div style="font-size:12px;color:var(--ink-3);margin-top:3px">申请于 ${UI.fmtTime(a.created_at, { withDate: true })}</div>
             <div style="margin-top:10px;display:flex;gap:8px">
               <button class="btn sm" onclick="Teams.manageInvite('${a.id}','accept','${id}')">通过</button>
               <button class="btn sm outline" onclick="Teams.manageInvite('${a.id}','decline','${id}')">拒绝</button>
             </div>
           </div>`).join('')}
         </div>` : `<div class="card" style="margin-bottom:16px"><p style="color:var(--ink-3);font-size:14px">暂无待审申请。可以去 <a href="#/players">选手名片广场</a> 主动邀请合适的同学</p></div>`}
+
+        ${t.pending_invites && t.pending_invites.length ? `
+        <div class="card" style="margin-bottom:16px">
+          <h3 style="font-family:var(--serif);margin-bottom:6px">已发出的邀请（${t.pending_invites.length}）</h3>
+          ${t.pending_invites.map((i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line)">
+            <span style="flex:1;font-size:14px;min-width:0"><b>${UI.esc(i.user_name)}</b>
+              <span style="font-size:12.5px;color:var(--ink-3)">邀请于 ${UI.fmtTime(i.created_at, { withDate: true })}，等待对方回应</span></span>
+            <button class="btn sm outline" onclick="Teams.manageInvite('${i.id}','cancel','${id}')">撤回邀请</button>
+          </div>`).join('')}
+        </div>` : ''}
 
         <div class="card">
           <h3 style="font-family:var(--serif);margin-bottom:10px">邀请成员</h3>
@@ -445,7 +484,7 @@ const Teams = {
             <div style="flex:1;min-width:0">
               <b style="font-size:14px">${UI.esc(u.name)}</b>
               <span style="font-size:12px;color:var(--ink-3);margin-left:6px">${UI.esc(u.student_id)} ${u.team_name ? '· 已入队' + u.team_name : ''}</span>
-              <div style="font-size:12px;color:var(--ink-3)">${UI.esc((u.skills || []).join('/'))} · ${UI.esc(u.contact || '')}</div>
+              <div style="font-size:12px;color:var(--ink-3)">${UI.esc((u.skills || []).join('/'))} · ${u.contact !== undefined ? UI.esc(u.contact || '未填写') : '联系方式未公开'}</div>
             </div>
             ${!u.team_name && !u.team_id ? `<button class="btn sm" onclick="Teams.inviteUser('${id}','${u.id}')">邀请</button>` : '<span class="tag gray">已入队</span>'}
           </div>`).join('');
@@ -474,17 +513,19 @@ const Teams = {
   },
 
   async manageInvite(invId, action, teamId) {
+    const labels = { accept: '已通过申请，新成员入队！', decline: '已拒绝该申请', cancel: '已撤回邀请' };
     try {
       await UI.api(`/api/teams/invites/${invId}/${action}`, { method: 'POST' });
-      UI.toast(action === 'accept' ? '已通过申请，新成员入队！' : '已拒绝', 'ok');
+      UI.toast(labels[action] || '已处理', 'ok');
       Teams.managePage(UI.$('#view'), teamId);
       App.refreshNav();
     } catch (e) { UI.toast(e.message, 'err'); }
   },
 
-  async inviteUser(teamId, userId) {
+  async inviteUser(teamId, userId, onDone) {
     UI.modal(`
       <h3>发送入队邀请</h3>
+      <p class="form-hint" style="margin-bottom:10px">对方接受后即加入队伍；若对方已入其他队伍，邀请将自动关闭。</p>
       <div class="form-item"><label>附言（可选）</label><textarea id="invMsg" maxlength="200" placeholder="简单介绍队伍和你在做的事，提高接受率"></textarea></div>
       <div class="modal-actions">
         <button class="btn outline" onclick="UI.closeModal()">取消</button>
@@ -495,6 +536,7 @@ const Teams = {
         await UI.api(`/api/teams/${teamId}/invite`, { method: 'POST', body: { user_id: userId, message: UI.$('#invMsg').value.trim() } });
         UI.closeModal();
         UI.toast('邀请已发送', 'ok');
+        if (onDone) onDone();
       } catch (e) { UI.toast(e.message, 'err'); }
     };
   },

@@ -82,8 +82,11 @@ const Auth = {
         <div class="form-item"><label>专业</label><input type="text" id="regMajor" maxlength="40" placeholder="如：软件工程"></div>
         <div class="form-item"><label>年级</label><input type="text" id="regGrade" maxlength="20" placeholder="如：2024级"></div>
         <div class="form-item"><label>联系方式（微信 / QQ / 手机）<span class="req">*</span></label>
-          <input type="text" id="regContact" maxlength="40" placeholder="如：微信 abc123，其他同学可见（用于组队联系）">
-          <p class="form-hint">会展示在你的名片卡和队伍卡上（登录用户可见），方便队长联系你</p></div>
+          <input type="text" id="regContact" maxlength="40" placeholder="如：微信 abc123（用于组队联系）">
+          <p class="form-hint">默认不在名片广场公开；你申请加入队伍时，会提供给该队队长。</p></div>
+        <div class="form-item"><label>联系方式公开展示</label>
+          <label class="check-line"><input type="checkbox" id="regContactVisible"> 在选手名片广场公开展示我的联系方式</label>
+          <p class="form-hint">保持关闭即为「默认不公开」；之后可随时在「我的空间 → 我的名片」修改。</p></div>
         <div class="form-item"><label>技能方向（多选）</label><div class="chips" id="regSkills">${skillChips}</div></div>
         <div class="form-item"><label>AI 基础</label>
           <select id="regAi"><option>零基础</option><option selected>入门</option><option>熟练</option></select></div>
@@ -136,6 +139,7 @@ const Auth = {
             major: UI.$('#regMajor').value.trim(),
             grade: UI.$('#regGrade').value.trim(),
             contact: UI.$('#regContact').value.trim(),
+            contact_visible: !!UI.$('#regContactVisible').checked,
             skills,
             ai_level: UI.$('#regAi').value,
             bio: UI.$('#regBio').value.trim(),
@@ -187,6 +191,15 @@ const Auth = {
     // 只展示与「我」直接相关的记录：别人邀请我 / 我发出的申请
     const pendingInvites = myInvites.filter((i) => i.status === 'pending' && i.direction === 'invite' && i.user_id === me.id);
     const pendingApplies = myInvites.filter((i) => i.status === 'pending' && i.direction === 'apply' && i.user_id === me.id);
+    // 最近处理过的记录（便于回顾申请/邀请的结果）
+    const handledMeta = { accepted: ['已加入', ''], declined: ['已拒绝', 'gray'], cancelled: ['已撤回', 'gray'], expired: ['已失效', 'gray'] };
+    const handled = myInvites
+      .filter((i) => i.status !== 'pending' && i.user_id === me.id)
+      .slice(0, 6)
+      .map((i) => {
+        const meta = handledMeta[i.status] || [i.status, 'gray'];
+        return { ...i, status_label: meta[0], status_cls: meta[1] };
+      });
 
     view.innerHTML = `
       <div class="page-head"><h1>我的空间</h1><p class="sub">管理名片、查看队伍与邀请</p></div>
@@ -213,6 +226,17 @@ const Auth = {
           </div>`).join('')}
       </div>` : ''}
 
+      ${handled.length ? `
+      <div class="card" style="margin-bottom:16px">
+        <b>最近记录</b>
+        ${handled.map((i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)">
+            <span style="flex:1;font-size:13.5px;color:var(--ink-2);min-width:0">${i.direction === 'invite' ? `收到「${UI.esc(i.team_name)}」的邀请` : `申请加入「${UI.esc(i.team_name)}」`}</span>
+            <span class="tag ${i.status_cls}" style="flex:none">${UI.esc(i.status_label)}</span>
+            <span style="font-size:12px;color:var(--ink-3);flex:none">${UI.fmtTime(i.updated_at || i.created_at, { withDate: true })}</span>
+          </div>`).join('')}
+      </div>` : ''}
+
       <div class="grid grid-2c" style="gap:16px" id="myGrid">
         <div class="card">
           <h3 style="font-family:var(--serif);margin-bottom:12px">我的名片</h3>
@@ -221,7 +245,7 @@ const Auth = {
         <div class="card">
           <h3 style="font-family:var(--serif);margin-bottom:12px">我的队伍</h3>
           ${myTeamDetail ? `
-            <a href="#/team/${myTeamDetail.id}" class="card clickable" style="border:none;padding:12px;margin:-12px">
+            <a href="#/team/${myTeamDetail.id}" class="card clickable embed" style="border:none;padding:12px;margin:-12px">
               <div class="team-name">${UI.esc(myTeamDetail.name)}</div>
               <div class="team-meta"><span class="track-badge ${myTeamDetail.track}">${UI.esc(myTeamDetail.track_name)}</span>
                 ${UI.statusTag(myTeamDetail.status)} <span class="tag gray">${myTeamDetail.member_count}/${myTeamDetail.max_size} 人</span></div>
@@ -273,6 +297,9 @@ const Auth = {
         <input type="text" id="pfGrade" value="${UI.esc(me.grade || '')}" placeholder="年级" style="margin-top:8px">
       </div>
       <div class="form-item"><label>联系方式（微信/QQ/手机）</label><input type="text" id="pfContact" value="${UI.esc(me.contact || '')}" maxlength="40"></div>
+      <div class="form-item"><label>联系方式公开展示</label>
+        <label class="check-line"><input type="checkbox" id="pfContactVisible" ${me.contact_visible ? 'checked' : ''}> 在选手名片广场公开展示我的联系方式</label>
+        <p class="form-hint">默认不公开。本人、队友，以及你申请加入的队伍队长始终可见。</p></div>
       <div class="form-item"><label>技能方向</label><div class="chips" id="pfSkills">${skillChips}</div></div>
       <div class="form-item"><label>AI 基础</label>
         <select id="pfAi">${['零基础','入门','熟练'].map((x) => `<option ${x === me.ai_level ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
@@ -295,6 +322,7 @@ const Auth = {
             major: UI.$('#pfMajor').value.trim(),
             grade: UI.$('#pfGrade').value.trim(),
             contact: UI.$('#pfContact').value.trim(),
+            contact_visible: !!UI.$('#pfContactVisible').checked,
             bio: UI.$('#pfBio').value.trim(),
             skills: UI.$$('#pfSkills .chip.on').map((c) => c.dataset.skill),
             ai_level: UI.$('#pfAi').value,
@@ -309,12 +337,14 @@ const Auth = {
 
   async respondInvite(id, action) {
     const labels = { accept: '接受', decline: '婉拒', cancel: '撤回' };
+    const doneText = { accept: '已加入队伍！', decline: '已婉拒', cancel: '已撤回' };
     const ok = await UI.confirm(`确定${labels[action] || action}这条记录吗？`, { okText: labels[action] || '确认' });
     if (!ok) return;
     try {
       await UI.api(`/api/teams/invites/${id}/${action}`, { method: 'POST' });
-      UI.toast('已处理', 'ok');
-      Auth.myPage(UI.$('#view'));
+      UI.toast(doneText[action] || '已处理', 'ok');
+      await Auth.myPage(UI.$('#view'));
+      App.refreshNav();
     } catch (e) { UI.toast(e.message, 'err'); }
   },
 };

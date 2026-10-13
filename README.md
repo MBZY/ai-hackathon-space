@@ -120,3 +120,16 @@ git push -u origin feat/你的功能
 - 登录：**学号 + 学号后 6 位**（初始密码），登录后可自行修改。
 - 管理员：`src-server/config.js` 的 `adminStudentIds` 白名单。
 - 测试账号：学号 `900000000001-3`（管理员）、`900000000101`（选手），密码 = 学号后 6 位。
+- **联系方式默认不公开**：同学在「我的空间 → 我的名片」勾选后才会在名片广场展示；队友与（申请加入的）队伍队长始终可见。详见 `docs/申请与审批-设计说明.md`。
+
+## 九、回归测试脚本
+
+| 脚本 | 覆盖 | 用法 |
+|---|---|---|
+| `smoke-test.js` | 全流程冒烟（45 项） | `REG_MODE=open PORT=3100 node server.js` 后 `node scripts/smoke-test.js` |
+| `ui-check.js` | 前端 UI 实测（25 项，puppeteer） | 同上服务后 `node scripts/ui-check.js`（需先跑冒烟造数） |
+| `test-regmode.js` | 问卷制 + 审核 + 导入（33 项） | 直接运行（自起隔离实例） |
+| `test-features.js` | 进度配图 / 作品 / 瀑布流（21 项） | 直接运行 |
+| `test-apply-flow.js` | 申请·审批 + 联系方式可见性（53 项） | 直接运行 |
+| `ui-apply-check.js` | 申请·审批 + 名片卡 UI 全流程（28 项，puppeteer） | 直接运行（真实数据副本隔离） |
+| `check-survey-ui.js` / `scan-*.js` | 问卷制 UI / 全站宽度溢出扫描 | 直接运行 |

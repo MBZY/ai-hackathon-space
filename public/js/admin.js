@@ -123,7 +123,7 @@ const Admin = {
           <td>${u.team_name ? UI.esc(u.team_name) : '<span class="tag coral">未组队</span>'}</td>
           <td style="white-space:nowrap">
             ${u.role === 'admin' ? `<button class="btn sm outline" onclick="Admin.setRole('${u.id}','user')">取消管理员</button>` : `<button class="btn sm outline" onclick="Admin.setRole('${u.id}','admin')">设为赛务组</button>`}
-            <button class="btn sm outline" style="margin-top:4px" onclick="Admin.resetPwd('${u.id}','${UI.esc(u.name)}')">重置密码</button>
+            <button class="btn sm outline" onclick="Admin.resetPwd('${u.id}','${UI.esc(u.name)}')">重置密码</button>
           </td>
         </tr>`).join('')}
       </table>

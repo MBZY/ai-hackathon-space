@@ -148,13 +148,20 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
    卡片
    ========================================================================== */
 .card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 19px 21px; }
-.card.clickable { cursor: pointer; transition: border-color var(--dur-fast) ease-out, transform var(--dur-fast) ease-out, box-shadow var(--dur-base) var(--ease); }
+/* display:block 必须显式设置：a.card 默认 inline，内含块级子元素时盒模型会碎片化，
+   hover 的 ring / 背景 / 位移会渲染成断续弧线（「我的空间 · 我的队伍」负 margin 场景曾复现）。
+   grid/flex 容器内的卡片本会被自动块化，此处统一显式块化。 */
+.card.clickable { display: block; cursor: pointer; transition: border-color var(--dur-fast) ease-out, transform var(--dur-fast) ease-out, box-shadow var(--dur-base) var(--ease); }
 .card.clickable:hover { border-color: var(--green-line); box-shadow: var(--glow); transform: translateY(-2px); text-decoration: none; }
+/* 隐形嵌套卡（border:none + 负 margin 撑开的点击区，如「我的空间 · 我的队伍」）：
+   不沿用上面的 hover 光环 —— 同色无边框嵌套下 ring 会显示成孤立轮廓线。改用整块淡绿底反馈。 */
+.card.clickable.embed { transition: background var(--dur-fast) ease-out; }
+.card.clickable.embed:hover { box-shadow: none; transform: none; border-color: transparent; background: var(--green-bg); }
 
 /* ==========================================================================
    标签 / 徽章（方形化：去 pill，工业感）
    ========================================================================== */
-.tag { display: inline-block; padding: 3px 9px; border-radius: var(--r-sm); font-size: 12px; line-height: 1.6; background: var(--green-bg); color: var(--green); border: 1px solid rgba(52, 227, 155, .22); margin: 2px 4px 2px 0; font-weight: 500; }
+.tag { display: inline-block; padding: 3px 9px; border-radius: var(--r-sm); font-size: 12px; line-height: 1.6; background: var(--green-bg); color: var(--green); border: 1px solid rgba(52, 227, 155, .22); margin: 2px 4px 2px 0; font-weight: 500; white-space: nowrap; }
 .tag.gray { background: #161f19; color: var(--ink-2); border-color: var(--line-2); }
 .tag.coral { background: var(--coral-bg); color: var(--coral); border-color: rgba(255, 122, 89, .28); }
 .tag.warn { background: var(--warn-bg); color: var(--warn); border-color: rgba(232, 180, 77, .3); }
@@ -215,8 +222,32 @@ input, textarea, select { font-family: inherit; font-size: 14px; }
 .member-dots { display: flex; margin-left: auto; }
 .member-dots .avatar { margin-left: -8px; border: 2px solid var(--card); }
 .member-dots .empty-slot { width: 30px; height: 30px; margin-left: -8px; border-radius: 50%; border: 1.5px dashed var(--green-line); background: var(--green-bg); color: var(--green); display: flex; align-items: center; justify-content: center; font-size: 14px; }
-.contact-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-2); font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+
+/* ==========================================================================
+   选手名片卡（名片广场）
+   ========================================================================== */
+.player-head { display: flex; gap: 12px; align-items: center; }
+.player-head-main { flex: 1; min-width: 0; }
+.player-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.player-name { font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-name-row .tag { margin: 0; flex: none; }
+.player-name-row .tag.status { margin-left: auto; }
+.player-sub { margin-top: 3px; font-size: 12.5px; color: var(--ink-3); line-height: 1.55; }
+.player-sub span { display: inline-block; max-width: 100%; } /* 学院/专业/年级各成一块：防止「2026级」被折成「2026 / 级」 */
+.player-sub .sep { font-style: normal; opacity: .65; margin: 0 4px; }
+.player-bio { font-size: 13px; color: var(--ink-2); margin-top: 9px; line-height: 1.75; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.player-team { margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
+.player-actions { margin-top: 12px; display: flex; gap: 8px; }
+.player-actions .btn { flex: 1; min-width: 0; }
+
+/* 联系方式行：块级流式（标签不再被竖排折断，长联系方式可优雅折行） */
+.contact-row { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line-2); font-size: 13px; color: var(--ink-2); line-height: 1.7; overflow-wrap: anywhere; }
+.contact-row .ck { color: var(--ink-3); }
 .contact-row .lock-hint { color: var(--ink-3); font-size: 12.5px; }
+
+/* 表单复选框行 */
+.check-line { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; color: var(--ink-2); cursor: pointer; line-height: 1.6; }
+.check-line input { width: 16px; height: 16px; margin-top: 2px; flex: none; accent-color: var(--green); cursor: pointer; }
 
 /* ==========================================================================
    首页 · Hero（蓝图主面板：状态行 + 大标题 + 倒计时仪表）
@@ -420,6 +451,24 @@ table.data tr:hover td { background: rgba(52, 227, 155, .035); }
   .hero h1 { font-size: 40px; }
   .cd-cell b { font-size: 36px; }
 }
+/* 后台数据表（队伍/选手/审核）：窄屏保持列宽可读 —— 表格固定画布 → 外层 .card 横滑 → 操作列常驻右侧（按钮不再被挤出屏幕）。
+   断点 1080px：覆盖所有「表格实际宽度 > 容器」的窗口尺寸，无滚动时 sticky 视觉无感。 */
+@media (max-width: 1080px) {
+  table.data { min-width: 960px; }
+  table.data th:last-child, table.data td:last-child {
+    position: sticky; right: 0; z-index: 2;
+    background: var(--card);
+    /* 左侧分隔阴影 + 右侧 44px 实色延伸（box-shadow 不占布局/不产生滚动区）：盖住滚动内容渲染进卡片 padding 区的"漏底"残影 */
+    box-shadow: -14px 0 16px -12px rgba(0, 0, 0, .6), 44px 0 0 0 var(--card);
+  }
+  /* 操作列按钮改竖排：列宽从 ~197px 收缩到 ~105px，减少对滚动内容的遮挡 */
+  table.data td:last-child { display: flex; flex-direction: column; align-items: flex-start; }
+  table.data td:last-child .btn + .btn { margin-top: 6px; }
+  /* 窄屏禁用行 hover 高亮：半透明背景会穿透常驻的操作列 */
+  table.data tr:hover td { background: transparent; }
+}
+/* 首列（姓名/队伍）保底宽度：姓名与角色标签单行可读 */
+table.data th:first-child, table.data td:first-child { min-width: 110px; }
 @media (max-width: 780px) {
   body { font-size: 14.5px; }
   .topbar-inner { padding: 0 12px; gap: 8px; height: 54px; }
@@ -444,6 +493,12 @@ table.data tr:hover td { background: rgba(52, 227, 155, .035); }
   /* 双栏在窄屏一律堆叠（此前内联样式导致"我的空间/队长管理"溢出，按钮显示不全） */
   .grid-2c, .grid-main, .grid-13, .grid-12 { grid-template-columns: 1fr; }
   .grid-3c .stat-num { font-size: 24px; }
-  table.data { font-size: 12.5px; display: block; overflow-x: auto; }
+  /* 注意：table.data 不再改 display:block（会破坏表格列布局并把操作按钮挤出视口）；
+     窄屏横滑与操作列常驻由 @media (max-width: 900px) 统一处理 */
+  table.data { font-size: 12.5px; }
+  /* 后台 tabs：与主导航一致改横滑，避免窄屏下逐字竖排 */
+  .admin-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .admin-tabs a { flex: none; white-space: nowrap; padding: 10px 14px; }
   .feed-cols { columns: 1; }
 }

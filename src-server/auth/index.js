@@ -92,6 +92,8 @@ function validateProfile(body, { partial = false } = {}) {
   if (body.major !== undefined) out.major = String(body.major || '').trim().slice(0, 40);
   if (body.grade !== undefined) out.grade = String(body.grade || '').trim().slice(0, 20);
   if (body.contact !== undefined) out.contact = String(body.contact || '').trim().slice(0, 40);
+  // 联系方式默认不公开（名片广场），由同学主动开启
+  if (body.contact_visible !== undefined) out.contact_visible = !!body.contact_visible;
   if (body.bio !== undefined) out.bio = String(body.bio || '').trim().slice(0, 200);
   if (body.skills !== undefined) {
     const skills = Array.isArray(body.skills) ? body.skills : [];
@@ -124,6 +126,7 @@ router.post('/register', authLimiter, (req, res) => {
   const salt = crypto.randomBytes(16).toString('hex');
   const user = {
     id: uid('u'),
+    contact_visible: false, // 默认不在名片广场公开联系方式，可在「我的空间」开启
     ...out,
     password_hash: hashPassword(password, salt),
     salt,
@@ -172,7 +175,7 @@ router.post('/register', authLimiter, (req, res) => {
 
   const token = makeSession(user.id);
   setSessionCookie(req, res, token);
-  res.status(201).json({ data: publicUser(user) });
+  res.status(201).json({ data: publicUser(user, { own: true }) });
 });
 
 router.post('/login', authLimiter, (req, res) => {
@@ -200,7 +203,7 @@ router.post('/login', authLimiter, (req, res) => {
   if (user.status === 'rejected') throw forbidden('报名申请未通过，如有疑问请联系赛务组');
   const token = makeSession(user.id);
   setSessionCookie(req, res, token);
-  res.json({ data: publicUser(user) });
+  res.json({ data: publicUser(user, { own: true }) });
 });
 
 router.post('/logout', (req, res) => {
@@ -234,7 +237,7 @@ router.post('/change-password', requireAuth, (req, res) => {
 });
 
 router.get('/me', requireAuth, (req, res) => {
-  res.json({ data: publicUser(req.user, true) });
+  res.json({ data: publicUser(req.user, { own: true }) });
 });
 
 function setSessionCookie(req, res, token) {
@@ -248,9 +251,14 @@ function setSessionCookie(req, res, token) {
   );
 }
 
-// 公开视图（含 own 标志决定是否返回联系方式等私有字段）
+// 公开视图（联系方式默认不公开，按可见性规则决定是否随视图返回）
+// 可见规则：
+//  - own=true         本人
+//  - viewer           队友互见（登录者与对方同队）
+//  - revealContact    已授权场景（如队长查看申请人名片，申请行为即授权向该队长提供）
+//  - u.contact_visible 本人在「我的空间」主动开启公开展示
 // team_id 动态计算：以 team_members / captain_id 为唯一事实来源
-function publicUser(u, own = false) {
+function publicUser(u, { own = false, viewer = null, revealContact = false } = {}) {
   const d = getDb();
   const base = {
     id: u.id,
@@ -264,10 +272,14 @@ function publicUser(u, own = false) {
     bio: u.bio,
     looking_for_team: u.looking_for_team,
     role: u.role,
+    contact_visible: !!u.contact_visible,
     team_id: teamIdOf(d, u.id),
     created_at: u.created_at,
   };
-  if (own) base.contact = u.contact || '';
+  const viewerId = viewer ? viewer.id : null;
+  const viewerTeam = viewerId ? teamIdOf(d, viewerId) : '';
+  const isTeammate = !!(viewerId && viewerId !== u.id && viewerTeam && viewerTeam === teamIdOf(d, u.id));
+  if (own || revealContact || isTeammate || u.contact_visible) base.contact = u.contact || '';
   return base;
 }
 

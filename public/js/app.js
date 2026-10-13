@@ -141,7 +141,7 @@ const App = {
           <div class="hero-actions">
             ${UI.me ? (UI.me.team_id
               ? `<a class="btn" href="#/team/${UI.me.team_id}">进入我的队伍</a>`
-              : `<a class="btn" href="#/team/new">创建队伍</a><a class="btn ghost outline" href="#/teams">浏览队伍</a>`)
+              : `<a class="btn" href="#/team/new">创建队伍</a><a class="btn outline" href="#/teams">浏览队伍</a>`)
             : (stats.registration && stats.registration.mode === 'open'
               ? `<a class="btn" href="#/register">立即注册组队</a><a class="btn outline" href="#/teams">先逛逛队伍广场</a>`
               : `<a class="btn" href="#/login">用学号登录组队</a><a class="btn outline" href="#/register">报名方式</a>`)}

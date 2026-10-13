@@ -118,7 +118,7 @@ const UI = {
 
   contactRow(contact, { label = '联系方式' } = {}) {
     if (!UI.me) return `<div class="contact-row"><span class="lock-hint">登录后可见${UI.esc(label)}</span></div>`;
-    return `<div class="contact-row"><span>${UI.esc(label)}：</span><b>${UI.esc(contact || '未填写')}</b></div>`;
+    return `<div class="contact-row"><span class="ck">${UI.esc(label)}：</span><b>${UI.esc(contact || '未填写')}</b></div>`;
   },
 
   // 分页选择器等简单渲染帮助

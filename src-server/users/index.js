@@ -9,7 +9,7 @@ const { unprocessable, notFound } = require('../errors');
 
 const router = express.Router();
 
-// 名片广场：游客可看基本信息，联系方式仅登录可见
+// 名片广场：登录可见。联系方式默认不公开——仅本人 / 队友 / 主动开启公开的同学会随视图返回
 router.get('/', (req, res) => {
   const d = getDb();
   const { skill, looking, q } = req.query;
@@ -39,7 +39,7 @@ router.get('/', (req, res) => {
 
   res.json({
     data: users.slice(0, 200).map((u) => ({
-      ...publicUser(u, !!req.user),
+      ...publicUser(u, { own: req.user ? u.id === req.user.id : false, viewer: req.user }),
       team_name: memberTeam[u.id] ? teamNameById[memberTeam[u.id]] || '' : '',
     })),
   });
@@ -54,7 +54,7 @@ router.get('/:id', (req, res) => {
   const team = member ? d.teams.find((t) => t.id === member.team_id) : null;
   res.json({
     data: {
-      ...publicUser(u, !!req.user),
+      ...publicUser(u, { own: req.user ? u.id === req.user.id : false, viewer: req.user }),
       team_name: team ? team.name : '',
     },
   });
@@ -74,6 +74,7 @@ router.put('/me', requireAuth, (req, res) => {
   if (body.major !== undefined) patch.major = body.major;
   if (body.grade !== undefined) patch.grade = body.grade;
   if (body.contact !== undefined) patch.contact = body.contact;
+  if (body.contact_visible !== undefined) patch.contact_visible = !!body.contact_visible;
   if (body.bio !== undefined) patch.bio = body.bio;
   if (body.skills !== undefined) patch.skills = body.skills;
   if (body.ai_level !== undefined) patch.ai_level = body.ai_level;

@@ -56,12 +56,36 @@ function notify(d, userId, type, title, content, link) {
   });
 }
 
+// 一人一队：某用户加入/创建队伍后，其余待处理申请/邀请自动失效（申请类通知对应队长，避免空追）
+function expireOtherPendings(d, userId, keepId) {
+  const now = new Date().toISOString();
+  const name = d.users.find((u) => u.id === userId)?.name || '对方';
+  d.invites
+    .filter((i) => i.status === 'pending' && i.user_id === userId && i.id !== keepId)
+    .forEach((i) => {
+      i.status = 'expired';
+      i.updated_at = now;
+      const t = d.teams.find((x) => x.id === i.team_id);
+      if (t) {
+        notify(
+          d,
+          t.captain_id,
+          'apply_expired',
+          `${name} 已加入其他队伍`,
+          `与「${t.name}」的${i.direction === 'apply' ? '申请' : '邀请'}已自动关闭`,
+          `#/team/${t.id}/manage`
+        );
+      }
+    });
+}
+
 function trackName(key) {
   return config.tracks.find((t) => t.key === key)?.name || key;
 }
 
-// 队伍公开视图。includeContact：仅登录用户可见联系方式（防爬虫）
-function teamView(d, team, { includeContact = false, withMembers = false } = {}) {
+// 队伍公开视图。includeContact：仅登录用户可见队伍联系方式（防爬虫）
+// viewer：登录者对象，用于「队友互见个人联系方式」判定
+function teamView(d, team, { includeContact = false, withMembers = false, viewer = null } = {}) {
   const members = activeMembers(d, team.id);
   const out = {
     id: team.id,
@@ -87,7 +111,7 @@ function teamView(d, team, { includeContact = false, withMembers = false } = {})
         role_in_team: m.role_in_team,
         joined_at: m.joined_at,
         is_captain: m.user_id === team.captain_id,
-        user: u ? publicUser(u) : null,
+        user: u ? publicUser(u, { viewer }) : null,
       };
     });
   }
@@ -144,7 +168,7 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const d = getDb();
   const team = findTeam(d, req.params.id);
-  const view = teamView(d, team, { includeContact: !!req.user, withMembers: true });
+  const view = teamView(d, team, { includeContact: !!req.user, withMembers: true, viewer: req.user });
   view.project = (d.projects || []).find((p) => p.team_id === team.id) || null;
   view.progress = d.progress_logs
     .filter((p) => p.team_id === team.id)
@@ -156,6 +180,10 @@ router.get('/:id', (req, res) => {
     view.my_role = req.user.id === team.captain_id ? 'captain' : activeMembers(d, team.id).some((m) => m.user_id === req.user.id) ? 'member' : 'guest';
     view.my_pending_invite = d.invites.find(
       (i) => i.user_id === req.user.id && i.team_id === team.id && i.direction === 'invite' && i.status === 'pending'
+    ) || null;
+    // 我发出的、等待队长处理的加入申请（详情页显示状态并支持撤回）
+    view.my_pending_apply = d.invites.find(
+      (i) => i.user_id === req.user.id && i.team_id === team.id && i.direction === 'apply' && i.status === 'pending'
     ) || null;
   }
   res.json({ data: view });
@@ -206,6 +234,7 @@ router.post('/', requireAuth, (req, res) => {
   });
   const me = d.users.find((u) => u.id === req.user.id);
   if (me) me.looking_for_team = false;
+  expireOtherPendings(d, req.user.id, null); // 建队后自动关闭其余待处理申请/邀请
   save();
   res.status(201).json({ data: { id: team.id } });
 });
@@ -321,13 +350,21 @@ router.post('/invites/:id/:action', requireAuth, (req, res) => {
     const allowed = (inv.direction === 'apply' && inv.user_id === me) || (inv.direction === 'invite' && team.captain_id === me);
     if (!allowed) throw forbidden();
     inv.status = 'cancelled';
+    if (inv.direction === 'apply') {
+      notify(d, team.captain_id, 'apply_cancelled', `${req.user.name} 撤回了加入「${team.name}」的申请`, '', `#/team/${team.id}/manage`);
+    } else {
+      notify(d, inv.user_id, 'invite_cancelled', `「${team.name}」撤回了邀请`, '可以继续逛逛队伍广场', '#/teams');
+    }
   } else if (action === 'decline') {
     // 被邀请人拒绝 / 队长拒绝申请
     const allowed = (inv.direction === 'invite' && inv.user_id === me) || (inv.direction === 'apply' && team.captain_id === me);
     if (!allowed) throw forbidden();
     inv.status = 'declined';
-    const other = inv.direction === 'invite' ? team.captain_id : inv.user_id;
-    notify(d, other, 'invite_declined', '邀请/申请已被拒绝', `「${team.name}」相关记录已更新`, '');
+    if (inv.direction === 'invite') {
+      notify(d, team.captain_id, 'invite_declined', `${req.user.name} 婉拒了「${team.name}」的邀请`, '', `#/team/${team.id}/manage`);
+    } else {
+      notify(d, inv.user_id, 'apply_declined', `你加入「${team.name}」的申请未通过`, '可以继续看看其他队伍，或完善名片等待被邀请', '#/teams');
+    }
   } else if (action === 'accept') {
     if (inv.direction === 'invite') {
       // 被邀请人接受
@@ -345,6 +382,7 @@ router.post('/invites/:id/:action', requireAuth, (req, res) => {
       const meUser = d.users.find((u) => u.id === me);
       if (meUser) meUser.looking_for_team = false;
       inv.status = 'accepted';
+      expireOtherPendings(d, me, inv.id); // 入队后其余待处理申请/邀请自动失效
       notify(d, team.captain_id, 'member_joined', `${req.user.name} 已加入「${team.name}」`, '', `#/team/${team.id}`);
       if (activeMembers(d, team.id).length >= config.team.maxSize) team.status = 'full';
     } else {
@@ -363,6 +401,7 @@ router.post('/invites/:id/:action', requireAuth, (req, res) => {
       });
       applicant.looking_for_team = false;
       inv.status = 'accepted';
+      expireOtherPendings(d, applicant.id, inv.id); // 入队后其余待处理申请/邀请自动失效
       notify(d, applicant.id, 'member_joined', `你已加入「${team.name}」`, '组队成功！10/17 正式开赛见。', `#/team/${team.id}`);
       if (activeMembers(d, team.id).length >= config.team.maxSize) team.status = 'full';
     }
@@ -494,15 +533,14 @@ router.get('/:id/manage', requireAuth, (req, res) => {
   const d = getDb();
   const team = findTeam(d, req.params.id);
   if (team.captain_id !== req.user.id && req.user.role !== 'admin') throw forbidden('仅队长可访问');
-  const view = teamView(d, team, { includeContact: true, withMembers: true });
+  const view = teamView(d, team, { includeContact: true, withMembers: true, viewer: req.user });
   view.pending_applies = d.invites
     .filter((i) => i.team_id === team.id && i.direction === 'apply' && i.status === 'pending')
-    .map((i) => ({
-      ...i,
-      user: d.users.find((u) => u.id === i.user_id)
-        ? { ...publicUser(d.users.find((u) => u.id === i.user_id)), contact: d.users.find((u) => u.id === i.user_id).contact }
-        : null,
-    }));
+    .map((i) => {
+      const u = d.users.find((x) => x.id === i.user_id);
+      // 申请行为即授权向该队长提供联系方式（revealContact），便于队长沟通
+      return { ...i, user: u ? publicUser(u, { revealContact: true }) : null };
+    });
   view.pending_invites = d.invites
     .filter((i) => i.team_id === team.id && i.direction === 'invite' && i.status === 'pending')
     .map((i) => ({ ...i, user_name: d.users.find((u) => u.id === i.user_id)?.name || '' }));
