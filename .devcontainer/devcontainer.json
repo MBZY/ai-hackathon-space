@@ -1,0 +1,25 @@
+{
+  "name": "AI 黑客松 · 组队空间",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm install",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "组队空间 (dev)",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+  "remoteEnv": {
+    "PORT": "3000"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "files.eol": "\n",
+        "editor.tabSize": 2,
+        "files.trimTrailingWhitespace": true
+      }
+    }
+  }
+}

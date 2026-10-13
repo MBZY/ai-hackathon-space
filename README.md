@@ -40,6 +40,18 @@ PORT=3100 node server.js        # 打开 http://localhost:3100
 
 > 首次启动会自动生成一份空的 `data/db.json`（不含任何真实数据）。
 
+### 不想装环境？用 GitHub 云端开发（Codespaces）
+
+仓库已内置 `.devcontainer/` 配置，浏览器里就能写代码、跑服务：
+
+1. 打开 https://github.com/MBZY/ai-hackathon-space
+2. 点绿色 **Code** 按钮 → **Codespaces** 标签 → **Create codespace on main**
+3. 首次初始化会自动 `npm install`，随后得到浏览器版 VS Code + 终端
+4. 终端执行 `node server.js`，端口 3000 自动转发并弹出预览
+
+> 个人免费账号每月含 120 核时。**用完记得在 Codespaces 页面点 Stop**，否则会持续计费。
+> 云端环境里 `data/` 是空的（隐私数据不进仓库），首次启动自动生成空库，适合开发调试。
+
 ## 四、⚠️ 数据安全铁律
 
 仓库里**绝对不允许**出现以下内容，`.gitignore` 已作排除，请勿强行 `git add -f`：
