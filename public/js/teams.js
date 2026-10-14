@@ -68,8 +68,13 @@ const Teams = {
   },
 
   // ---------- 建队 ----------
-  newPage(view) {
+  async newPage(view) {
     if (!UI.me) { location.hash = '#/login'; return; }
+    // 先刷新登录态：队伍可能刚被解散/被移除，避免用过期 team_id 把建队页误导到已不存在的队伍
+    try {
+      UI.me = await UI.api('/api/auth/me');
+      App.refreshNav();
+    } catch (e) { /* 网络异常时沿用缓存 */ }
     if (UI.me.team_id) { location.hash = `#/team/${UI.me.team_id}`; return; }
     const skillChips = ['前端开发','后端开发','游戏开发','AI / 算法','UI / 设计','产品 / 策划','新媒体运营','暂无经验，想学习'].map((s) => `<span class="chip" data-skill="${s}">${s}</span>`).join('');
     view.innerHTML = `
@@ -385,6 +390,16 @@ const Teams = {
     try { t = await UI.api(`/api/teams/${id}/manage`); } catch (e) { view.innerHTML = `<div class="empty">${UI.esc(e.message)}</div>`; return; }
     if (t.captain_id !== UI.me.id && UI.me.role !== 'admin') { location.hash = `#/team/${id}`; return; }
 
+    // 解散区：组队期内队长可自行解散；锁定后仅赛务组可强制解散
+    const iAmAdmin = UI.me.role === 'admin' && t.captain_id !== UI.me.id;
+    const disbandHTML = t.status !== 'locked'
+      ? `<p style="font-size:13.5px;color:var(--ink-2);margin-bottom:12px">解散后队伍将从广场移除，全部成员退出队伍（可重新组队），已发布的进度与作品信息一并清除，<b>不可恢复</b>。</p>
+         <button class="btn coral" id="disbandBtn">解散队伍</button>`
+      : iAmAdmin
+        ? `<p style="font-size:13.5px;color:var(--ink-2);margin-bottom:12px">队伍已锁定（成员不可变更）。赛务组可强制解散，成员将收到通知并恢复「找队中」。</p>
+           <button class="btn coral" id="disbandBtn">赛务组强制解散</button>`
+        : `<p style="font-size:13.5px;color:var(--ink-2)">队伍已锁定（组队截止 10/16 22:00 后不可自行解散），如需解散请联系赛务组。</p>`;
+
     view.innerHTML = `
     <div class="page-head"><h1>队长管理 · ${UI.esc(t.name)}</h1>
       <p class="sub">${UI.statusTag(t.status)} <span class="tag gray">${t.member_count}/${t.max_size} 人</span>
@@ -460,12 +475,17 @@ const Teams = {
           <button class="btn outline sm" id="edSave">保存信息</button>
         </div>
 
-        <div class="card">
+        <div class="card" style="margin-bottom:16px">
           <h3 style="font-family:var(--serif);margin-bottom:10px">锁定队伍</h3>
           <p style="font-size:13.5px;color:var(--ink-2);margin-bottom:12px">锁定 = 确认报名信息（等同提交组队登记表）。锁定后成员不再变动；10/16 22:00 系统将自动锁定所有队伍。</p>
           ${t.status !== 'locked'
             ? `<button class="btn coral" id="lockBtn">确认锁定队伍</button>`
             : `<span class="tag warn">已锁定</span> ${UI.me.role === 'admin' ? '<button class="btn sm outline" style="margin-left:8px" onclick="Teams.adminUnlock(\'' + id + '\')">管理员解锁</button>' : '（需调整请联系赛务组）'}`}
+        </div>
+
+        <div class="card" style="border-color:var(--coral)">
+          <h3 style="font-family:var(--serif);margin-bottom:10px">解散队伍</h3>
+          ${disbandHTML}
         </div>
       </div>
     </div>`;
@@ -510,6 +530,28 @@ const Teams = {
         } catch (e) { UI.toast(e.message, 'err'); }
       };
     }
+    if (UI.$('#disbandBtn')) {
+      UI.$('#disbandBtn').onclick = () => Teams.disband(id, t.name, t.member_count, iAmAdmin);
+    }
+  },
+
+  // 解散队伍（队长 / 赛务组）——不可恢复，需二次确认
+  async disband(teamId, name, memberCount, asAdmin = false) {
+    const extra = memberCount > 1 ? `队伍里还有 ${memberCount - 1} 位队友，他们会被移出队伍并收到通知。` : '';
+    const ok = await UI.confirm(
+      `「${name}」将被删除：成员全部退出队伍（可重新组队），进度与作品信息一并清除，且无法恢复。${extra}确定解散吗？`,
+      { title: '解散队伍', okText: asAdmin ? '强制解散' : '确认解散', danger: true }
+    );
+    if (!ok) return;
+    try {
+      await UI.api(`/api/teams/${teamId}`, { method: 'DELETE' });
+      UI.toast('队伍已解散，可以去队伍广场重新组队', 'ok');
+      // 刷新登录态与导航（我的队伍链接需清空）
+      try { UI.me = await UI.api('/api/auth/me'); } catch (e) { /* ignore */ }
+      App.refreshNav();
+      if (location.hash === '#/teams') App.route();
+      else location.hash = '#/teams';
+    } catch (e) { UI.toast(e.message, 'err'); }
   },
 
   async manageInvite(invId, action, teamId) {

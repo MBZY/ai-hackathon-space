@@ -434,6 +434,101 @@ router.delete('/:id/members/:userId', requireAuth, (req, res) => {
   res.json({ data: { ok: true } });
 });
 
+// ---------- 解散队伍（队长 / 赛务组）----------
+// 语义：队伍整体注销 —— 队伍、成员关系、待处理申请/邀请、进度日志、作品一并清除，
+//       成员恢复「找队中」并收到通知；解散前的完整快照写入 d.disbanded_teams 便于事后查证。
+// 约束：队长仅在组队截止（10/16 22:00 自动锁定）前可自行解散；锁定后需赛务组处理（管理员不受限）。
+router.delete('/:id', requireAuth, (req, res) => {
+  const d = getDb();
+  const team = findTeam(d, req.params.id);
+  const isCaptain = team.captain_id === req.user.id;
+  const isAdmin = req.user.role === 'admin';
+  if (!isCaptain && !isAdmin) throw forbidden('仅队长可解散队伍');
+  if (!isAdmin && nowTeamStatus(team) === 'locked') {
+    throw conflict('队伍已锁定（组队截止 10/16 22:00），如需解散请联系赛务组');
+  }
+
+  const members = activeMembers(d, team.id);
+  const invites = d.invites.filter((i) => i.team_id === team.id);
+  const logs = d.progress_logs.filter((p) => p.team_id === team.id);
+  const projects = (d.projects || []).filter((p) => p.team_id === team.id);
+  const now = new Date().toISOString();
+
+  // 归档快照（不可恢复操作留痕，便于赛务组事后查证与人工恢复）
+  d.disbanded_teams = d.disbanded_teams || [];
+  d.disbanded_teams.push({
+    team,
+    members,
+    invites,
+    progress_logs: logs,
+    projects,
+    member_names: members.map((m) => d.users.find((u) => u.id === m.user_id)?.name || ''),
+    operator_id: req.user.id,
+    operator_name: req.user.name,
+    by_admin: isAdmin && !isCaptain,
+    by_captain: isCaptain,
+    reason: String((req.body || {}).reason || '').slice(0, 200),
+    disbanded_at: now,
+  });
+
+  // 待处理的申请 / 邀请关闭并通知对方（队伍没了，通知里不再带队伍链接）
+  invites
+    .filter((i) => i.status === 'pending')
+    .forEach((i) => {
+      if (i.direction === 'apply') {
+        notify(d, i.user_id, 'apply_cancelled', `你加入「${team.name}」的申请已关闭`, '该队伍已解散，可以继续看看其他队伍', '#/teams');
+      } else {
+        notify(d, i.user_id, 'invite_cancelled', `「${team.name}」的邀请已取消`, '该队伍已解散，可以继续看看其他队伍', '#/teams');
+      }
+    });
+  // 通知其余成员
+  members
+    .filter((m) => m.user_id !== req.user.id)
+    .forEach((m) =>
+      notify(
+        d,
+        m.user_id,
+        'team_disbanded',
+        `队伍「${team.name}」已解散`,
+        '队长已解散该队伍，你可以去队伍广场重新找队（组队截止 10/16 22:00）',
+        '#/teams'
+      )
+    );
+
+  // 成员恢复「找队中」
+  members.forEach((m) => {
+    const u = d.users.find((x) => x.id === m.user_id);
+    if (u) u.looking_for_team = true;
+  });
+
+  // 删除进度配图文件（严格限定在 data/uploads 内，用 basename 防目录穿越）
+  const uploadsDir = path.join(config.dataDir, 'uploads');
+  logs.forEach((p) =>
+    (p.images || []).forEach((src) => {
+      if (!String(src).startsWith('/uploads/')) return;
+      const f = path.join(uploadsDir, path.basename(String(src)));
+      if (f.indexOf(uploadsDir) === 0 && fs.existsSync(f)) {
+        try { fs.unlinkSync(f); } catch (e) { /* 文件已删/被占用时忽略 */ }
+      }
+    })
+  );
+
+  // 级联清理
+  const projectIds = new Set(projects.map((p) => p.id));
+  d.teams = d.teams.filter((t) => t.id !== team.id);
+  d.team_members = d.team_members.filter((m) => m.team_id !== team.id);
+  d.invites = d.invites.filter((i) => i.team_id !== team.id);
+  d.progress_logs = d.progress_logs.filter((p) => p.team_id !== team.id);
+  d.projects = (d.projects || []).filter((p) => p.team_id !== team.id);
+  d.project_likes = (d.project_likes || []).filter((l) => !projectIds.has(l.project_id));
+  d.milestone_checks = (d.milestone_checks || []).filter((c) => c.team_id !== team.id);
+  save();
+
+  res.json({
+    data: { ok: true, team_name: team.name, member_count: members.length, projects: projects.length },
+  });
+});
+
 router.post('/:id/transfer', requireAuth, (req, res) => {
   const d = getDb();
   const team = findTeam(d, req.params.id);

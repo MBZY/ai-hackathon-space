@@ -24,6 +24,7 @@ function emptyDb() {
     projects: [],
     milestone_checks: [],
     project_likes: [],
+    disbanded_teams: [], // 解散归档：{team,members,invites,progress_logs,projects,operator_*,reason,disbanded_at}
   };
 }
 
