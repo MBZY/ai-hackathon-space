@@ -149,7 +149,7 @@ const App = {
               ? `<a class="btn" href="#/register">立即注册组队</a><a class="btn outline" href="#/teams">先逛逛队伍广场</a>`
               : `<a class="btn" href="#/login">用学号登录组队</a><a class="btn outline" href="#/register">报名方式</a>`)}
           </div>
-          <p class="hero-note">每队 1—5 人 · 不设统一命题，赛道内自由选题${!UI.me && stats.registration && stats.registration.mode !== 'open'
+          <p class="hero-note">每队 1—5 人 · 不设统一命题，赛道内自由选题；建议方向为「创新赋能校园与城市生活」（仅供参考）${!UI.me && stats.registration && stats.registration.mode !== 'open'
             ? `<br>报名统一通过「${UI.esc(stats.registration.survey_title || '腾讯问卷')}」收集：先填问卷，名单导入后用学号登录（<b>${UI.esc(stats.registration.initial_password_hint || '初始密码为学号后 6 位')}</b>）`
             : ''}</p>
         </div>
@@ -215,7 +215,7 @@ const App = {
           <h3 style="font-family:var(--serif);margin-bottom:12px">赛制要点</h3>
           <ul style="font-size:14px;line-height:2;padding-left:20px;color:var(--ink-2)">
             <li>以团队报名，每队 <b>3—5 人</b>（特殊情况可 1 人独立参赛），鼓励跨专业跨年级</li>
-            <li><b>不设统一命题</b>，赛道内自由选题；作品须为赛期内新启动项目</li>
+            <li><b>不设统一命题</b>，赛道内自由选题；建议方向为「创新赋能校园与城市生活」（仅供参考）；作品须为赛期内新启动项目</li>
             <li>四大赛道：网站与应用开发 / 游戏开发 / 新媒体与智能体 / 综合</li>
             <li>奖项：一等奖 1 组、二等奖 2 组、三等奖 3 组、最佳人气奖 3 组、完赛奖全员</li>
             <li>完赛数据作为协会各部门人才遴选参考</li>
