@@ -18,6 +18,8 @@
  * 合并规则（与 scripts/merge-online-backup.js 一致）：
  *   users      —— 本地为准（保留密码哈希，线上备份不含哈希）；线上独有用户补入，密码重置为学号后 6 位
  *   其余集合   —— 按 id 取并集，同 id 以线上为准（线上为最新状态）
+ *   删除同步   —— 本地独有记录视为「线上已删除」（如解散的队伍）并从本地清除，
+ *                 避免下次部署把已删除数据复活；notifications/announcements 仅追加不删
  *
  * 备份落盘位置：
  *   1) <项目>/data/backups/online-<时间戳>.json      —— 便于本地查看（已 gitignore）
@@ -43,6 +45,9 @@ const COLLECTIONS = [
   'teams', 'team_members', 'invites', 'messages', 'notifications',
   'progress_logs', 'announcements', 'projects', 'milestone_checks', 'project_likes',
 ];
+// 这些集合只增不删（通知仅追加、公告仅追加）；其余集合执行「删除同步」：
+// 本地独有的记录 = 线上已被删除（如解散的队伍），必须清除，否则下次部署会把已删数据"复活"。
+const UNION_ONLY = new Set(['notifications', 'announcements']);
 
 function promptPassword() {
   if (process.env.ADMIN_PASSWORD) return Promise.resolve(process.env.ADMIN_PASSWORD);
@@ -110,11 +115,12 @@ function merge(local, online) {
       addedUsers += 1;
     }
   }
-  // 其余集合：union，线上为准
+  // 其余集合：union（线上为准）+ 删除同步（本地独有 = 线上已删除，如解散的队伍）
   const stats = {};
   for (const key of COLLECTIONS) {
     const byId = new Map((local[key] || []).map((x) => [x.id, x]));
-    let added = 0, updated = 0;
+    const onlineIds = new Set((online[key] || []).map((x) => x.id));
+    let added = 0, updated = 0, deleted = 0;
     for (const x of (online[key] || [])) {
       if (byId.has(x.id)) {
         if (JSON.stringify(byId.get(x.id)) !== JSON.stringify(x)) updated += 1;
@@ -124,9 +130,16 @@ function merge(local, online) {
         added += 1;
       }
     }
+    if (!UNION_ONLY.has(key)) {
+      for (const id of Array.from(byId.keys())) {
+        if (!onlineIds.has(id)) { byId.delete(id); deleted += 1; }
+      }
+    }
     local[key] = Array.from(byId.values());
-    if (added || updated) stats[key] = { added, updated, total: local[key].length };
+    if (added || updated || deleted) stats[key] = { added, updated, deleted, total: local[key].length };
   }
+  // 解散队伍归档同步（以线上为准）
+  if (online.disbanded_teams) local.disbanded_teams = online.disbanded_teams;
   return { addedUsers, stats };
 }
 
