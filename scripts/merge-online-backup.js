@@ -1,10 +1,12 @@
 'use strict';
 /* 合并线上备份 → 本地 data/db.json（部署前保数据流程 + 追加测试账号）
- * 用法：node scripts/merge-online-backup.js <online-backup.json> [--test-accounts]
+ * 用法：node scripts/merge-online-backup.js <online-backup.json> [--test-accounts] [--sync-deletes]
  * 规则：
  *   users        —— 以本地为准（本地有密码哈希）；线上独有的用户补入（密码重置=学号后6位）
  *   其余集合     —— 按 id 取并集，同 id 以线上为准（线上是最新状态）
- *   --test-accounts —— 追加测试账号（3 管理员 + 1 选手，学号 900000000001-3 / 900000000101，密码=学号后6位） */
+ *   --test-accounts —— 追加测试账号（3 管理员 + 1 选手，学号 900000000001-3 / 900000000101，密码=学号后6位）
+ *   --sync-deletes  —— 删除同步：本地独有记录视为"线上已删除"而清除（如解散的队伍）。
+ *                      仅用于「本地=线上纯副本」的日常保活；本地刚 prepare 过未部署数据时禁止使用！ */
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -18,6 +20,7 @@ const newAuth = (pwd) => { const salt = crypto.randomBytes(16).toString('hex'); 
 
 const backupFile = process.argv[2];
 const withTest = process.argv.includes('--test-accounts');
+const withSyncDeletes = process.argv.includes('--sync-deletes');
 if (!backupFile || !fs.existsSync(backupFile)) {
   console.error('用法：node scripts/merge-online-backup.js <online-backup.json> [--test-accounts]');
   process.exit(2);
@@ -43,20 +46,31 @@ let addedUsers = 0;
 });
 
 // ---------- 其余集合：union，线上优先 ----------
+// --sync-deletes：以线上为准执行"删除同步"（本地独有记录 = 线上已被删除）。
+//   仅适用于「本地是线上纯副本」的日常保活；若本地刚用 prepare 生成过尚未部署的新数据，切勿开启！
+const UNION_ONLY = new Set(['users', 'notifications', 'announcements']); // 这些集合只增不删
 const stats = {};
 for (const key of COLLECTIONS) {
   const localArr = local[key] || [];
   const onlineArr = online[key] || [];
   const byId = new Map();
   localArr.forEach((x) => byId.set(x.id, x));
-  let updated = 0, added = 0;
+  let updated = 0, added = 0, deleted = 0;
+  const onlineIds = new Set(onlineArr.map((x) => x.id));
   onlineArr.forEach((x) => {
     if (byId.has(x.id)) { if (JSON.stringify(byId.get(x.id)) !== JSON.stringify(x)) updated += 1; byId.set(x.id, x); }
     else { byId.set(x.id, x); added += 1; }
   });
+  if (withSyncDeletes && !UNION_ONLY.has(key)) {
+    for (const id of Array.from(byId.keys())) {
+      if (!onlineIds.has(id)) { byId.delete(id); deleted += 1; }
+    }
+  }
   local[key] = Array.from(byId.values());
-  if (added || updated) stats[key] = { added, updated, total: local[key].length };
+  if (added || updated || deleted) stats[key] = { added, updated, deleted, total: local[key].length };
 }
+// 解散队伍归档同步（线上为准）
+local.disbanded_teams = online.disbanded_teams || local.disbanded_teams || [];
 
 // ---------- 测试账号 ----------
 if (withTest) {
