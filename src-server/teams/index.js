@@ -30,6 +30,8 @@ function nowTeamStatus(team) {
   // 10/16 22:00 后所有 recruiting/full 队伍视为 locked（延迟生效，不强制改库）
   if (team.status === 'locked' || team.status === 'submitted') return team.status;
   if (Date.now() >= config.event.teamBuildingEnd.getTime()) return 'locked';
+  // 2026-10-15 起取消人数上限：历史 full 状态在截止前一律视为招募中
+  if (team.status === 'full') return 'recruiting';
   return team.status;
 }
 
@@ -97,7 +99,6 @@ function teamView(d, team, { includeContact = false, withMembers = false, viewer
     need_skills: team.need_skills || [],
     status: nowTeamStatus(team),
     member_count: members.length,
-    max_size: config.team.maxSize,
     captain_id: team.captain_id,
     created_at: team.created_at,
     locked_at: team.locked_at || null,
@@ -142,7 +143,7 @@ router.get('/', (req, res) => {
   const { track, status, skill, sort } = req.query;
   let teams = [...d.teams];
 
-  // 延迟锁定落库（仅在实际发生变更时写盘）
+  // 延迟锁定落库（仅在实际发生变更时写盘）；截止前把历史 full 状态恢复为 recruiting（2026-10-15 取消人数上限）
   const past = Date.now() >= config.event.teamBuildingEnd.getTime();
   if (past) {
     let changed = false;
@@ -150,6 +151,15 @@ router.get('/', (req, res) => {
       if (t.status === 'recruiting' || t.status === 'full') {
         t.status = 'locked';
         t.locked_at = t.locked_at || new Date().toISOString();
+        changed = true;
+      }
+    });
+    if (changed) save();
+  } else {
+    let changed = false;
+    teams.forEach((t) => {
+      if (t.status === 'full') {
+        t.status = 'recruiting';
         changed = true;
       }
     });
@@ -279,7 +289,6 @@ router.post('/:id/apply', requireAuth, (req, res) => {
   const role_in_team = String((req.body || {}).role_in_team || '').slice(0, 10);
 
   if (nowTeamStatus(team) !== 'recruiting') throw conflict('该队伍当前不在招募中');
-  if (activeMembers(d, team.id).length >= config.team.maxSize) throw conflict('该队伍已满员');
   if (teamIdOf(d, req.user.id)) throw conflict('你已加入或创建了一支队伍（一人一队）');
   if (d.invites.some((i) => i.team_id === team.id && i.user_id === req.user.id && i.direction === 'apply' && i.status === 'pending')) {
     throw conflict('已申请过该队伍，请等待队长处理');
@@ -308,7 +317,6 @@ router.post('/:id/invite', requireAuth, (req, res) => {
   const team = findTeam(d, req.params.id);
   if (team.captain_id !== req.user.id) throw forbidden('仅队长可邀请成员');
   if (nowTeamStatus(team) !== 'recruiting') throw conflict('队伍已锁定，无法邀请新成员');
-  if (activeMembers(d, team.id).length >= config.team.maxSize) throw conflict('队伍已满员（最多 5 人）');
 
   const targetId = String((req.body || {}).user_id || '');
   const message = String((req.body || {}).message || '').trim().slice(0, 200);
@@ -371,7 +379,6 @@ router.post('/invites/:id/:action', requireAuth, (req, res) => {
       if (inv.user_id !== me) throw forbidden();
       if (teamIdOf(d, me)) throw conflict('你已加入其他队伍');
       if (nowTeamStatus(team) !== 'recruiting') throw conflict('队伍已锁定');
-      if (activeMembers(d, team.id).length >= config.team.maxSize) throw conflict('队伍已满员');
       d.team_members.push({
         id: uid('m'),
         team_id: team.id,
@@ -384,14 +391,12 @@ router.post('/invites/:id/:action', requireAuth, (req, res) => {
       inv.status = 'accepted';
       expireOtherPendings(d, me, inv.id); // 入队后其余待处理申请/邀请自动失效
       notify(d, team.captain_id, 'member_joined', `${req.user.name} 已加入「${team.name}」`, '', `#/team/${team.id}`);
-      if (activeMembers(d, team.id).length >= config.team.maxSize) team.status = 'full';
     } else {
       // 队长接受申请
       if (team.captain_id !== me) throw forbidden('仅队长可处理申请');
       const applicant = d.users.find((u) => u.id === inv.user_id);
       if (!applicant || teamIdOf(d, applicant.id)) throw conflict('对方已加入其他队伍');
       if (nowTeamStatus(team) !== 'recruiting') throw conflict('队伍已锁定');
-      if (activeMembers(d, team.id).length >= config.team.maxSize) throw conflict('队伍已满员');
       d.team_members.push({
         id: uid('m'),
         team_id: team.id,
@@ -403,7 +408,6 @@ router.post('/invites/:id/:action', requireAuth, (req, res) => {
       inv.status = 'accepted';
       expireOtherPendings(d, applicant.id, inv.id); // 入队后其余待处理申请/邀请自动失效
       notify(d, applicant.id, 'member_joined', `你已加入「${team.name}」`, '组队成功！10/17 正式开赛见。', `#/team/${team.id}`);
-      if (activeMembers(d, team.id).length >= config.team.maxSize) team.status = 'full';
     }
   } else {
     throw badRequest('未知操作');
@@ -426,8 +430,8 @@ router.delete('/:id/members/:userId', requireAuth, (req, res) => {
   const kicked = d.users.find((u) => u.id === req.params.userId);
   if (kicked) kicked.looking_for_team = true;
   notify(d, req.params.userId, 'member_removed', `你已离开「${team.name}」`, '可以去队伍广场继续找队', '#/teams');
-  // 队伍若从 full 回到未满
-  if (team.status === 'full' && activeMembers(d, team.id).length < config.team.maxSize && Date.now() < config.event.teamBuildingEnd.getTime()) {
+  // 历史遗留 full 状态兜底恢复（2026-10-15 取消人数上限后不再产生 full）
+  if (team.status === 'full' && Date.now() < config.event.teamBuildingEnd.getTime()) {
     team.status = 'recruiting';
   }
   save();

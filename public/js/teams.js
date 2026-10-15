@@ -16,7 +16,7 @@ const Teams = {
     const trackOpts = [
       ['', '全部赛道'], ['web', '网站与应用开发'], ['game', '游戏开发'], ['media', '新媒体与智能体'], ['open', '综合赛道'],
     ];
-    const statusOpts = [['', '全部状态'], ['recruiting', '招募中'], ['full', '已满员'], ['locked', '已锁定']];
+    const statusOpts = [['', '全部状态'], ['recruiting', '招募中'], ['locked', '已锁定']];
 
     view.innerHTML = `
       <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
@@ -40,12 +40,6 @@ const Teams = {
   },
 
   cardHTML(t) {
-    const slots = [];
-    for (let i = 0; i < t.max_size; i++) {
-      slots.push(i < t.member_count
-        ? `<span class="empty-slot" style="border-style:solid;background:transparent;color:transparent">·</span>`
-        : `<span class="empty-slot" title="缺人">+</span>`);
-    }
     const needSkillTags = (t.need_skills || []).map((s) => `<span class="tag coral">${UI.esc(s)}</span>`).join('');
     return `
     <a href="#/team/${t.id}" class="card clickable">
@@ -60,8 +54,7 @@ const Teams = {
         ${needSkillTags || '<span class="tag gray">不限技能</span>'}
       </div>
       <div class="team-meta" style="margin-top:14px">
-        <span class="tag gray">${t.member_count}/${t.max_size} 人</span>
-        <div class="member-dots">${slots.join('')}</div>
+        <span class="tag gray">${t.member_count} 人</span>
       </div>
       ${UI.contactRow(t.contact, { label: '队长联系' })}
     </a>`;
@@ -137,13 +130,12 @@ const Teams = {
     const myRole = t.my_role || 'guest';
     const isMember = myRole === 'captain' || myRole === 'member';
     const myPendingApply = t.my_pending_apply || null;
-    // 可申请：未入队 + 无待处理申请/邀请 + 招募中 + 未满员
+    // 可申请：未入队 + 无待处理申请/邀请 + 招募中（人数不设上限，仅推荐 3~5 人）
     const canApply = UI.me && myRole === 'guest' && !UI.me.team_id && !myPendingApply && !t.my_pending_invite
-      && t.status === 'recruiting' && t.member_count < t.max_size;
+      && t.status === 'recruiting';
     // 不能申请时给出原因（不再让按钮静默消失）
     const applyHint = UI.me && myRole === 'guest' && !canApply && !myPendingApply && !t.my_pending_invite
       ? (UI.me.team_id ? '你已加入其他队伍（一人一队）'
-        : t.member_count >= t.max_size ? '队伍已满员'
         : t.status !== 'recruiting' ? '已停止招募' : '')
       : '';
     const stageOpts = ['选题确认', '原型设计', '开发实现', '联调测试', '打磨提交'];
@@ -152,7 +144,7 @@ const Teams = {
     <div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
       <div><h1>${UI.esc(t.name)}</h1>
         <p class="sub"><span class="track-badge ${t.track}">${UI.esc(t.track_name)}</span>
-          ${UI.statusTag(t.status)} <span class="tag gray">${t.member_count}/${t.max_size} 人</span>
+          ${UI.statusTag(t.status)} <span class="tag gray">${t.member_count} 人</span>
           <span class="tag gray">创建于 ${UI.fmtDate(t.created_at)}</span></p></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         ${canApply ? `<button class="btn" id="btnApply">申请加入</button>` : ''}
@@ -221,7 +213,7 @@ const Teams = {
 
       <div>
         <div class="card">
-          <h3 style="font-family:var(--serif);margin-bottom:8px">成员（${t.member_count}/${t.max_size}）</h3>
+          <h3 style="font-family:var(--serif);margin-bottom:8px">成员（${t.member_count} 人）</h3>
           ${t.members.map((m) => `
           <div class="member-row">
             ${UI.avatar(m.user?.name, m.user_id)}
@@ -231,7 +223,6 @@ const Teams = {
             </div>
             ${UI.me && m.user_id !== UI.me.id ? `<button class="btn sm outline" onclick="location.hash='#/messages/${m.user_id}'">私信</button>` : ''}
           </div>`).join('')}
-          ${t.member_count < t.max_size && t.status === 'recruiting' ? `<div class="member-row" style="color:var(--ink-3);font-size:13.5px">还有 ${t.max_size - t.member_count} 个空位，虚位以待</div>` : ''}
         </div>
         ${!UI.me ? `<div class="card" style="margin-top:16px;text-align:center"><p style="font-size:14px;color:var(--ink-2);margin-bottom:12px">登录后可申请加入、查看联系方式</p><a class="btn" href="#/login">去登录</a></div>` : ''}
       </div>
@@ -402,7 +393,7 @@ const Teams = {
 
     view.innerHTML = `
     <div class="page-head"><h1>队长管理 · ${UI.esc(t.name)}</h1>
-      <p class="sub">${UI.statusTag(t.status)} <span class="tag gray">${t.member_count}/${t.max_size} 人</span>
+      <p class="sub">${UI.statusTag(t.status)} <span class="tag gray">${t.member_count} 人</span>
       ${t.status !== 'locked' ? '<span class="tag warn">锁定前可自由调整成员与信息</span>' : '<span class="tag gray">已锁定，成员不可变更</span>'}</p></div>
 
     <div class="grid grid-2c">

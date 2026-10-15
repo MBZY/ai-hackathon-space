@@ -100,10 +100,10 @@ const Players = {
         }</div>`
       : '<div class="contact-row"><span class="lock-hint">联系方式未公开 · 私信或申请入队后可见</span></div>';
 
-    // 邀请入队：我是队长、队伍招募中且未满员、对方尚未入队
+    // 邀请入队：我是队长、队伍招募中、对方尚未入队（人数不设上限，仅推荐 3~5 人）
     const myTeam = Players._myTeam;
     const canInvite = !!(UI.me && !isMe && !u.team_id && myTeam
-      && myTeam.my_role === 'captain' && myTeam.status === 'recruiting' && myTeam.member_count < myTeam.max_size);
+      && myTeam.my_role === 'captain' && myTeam.status === 'recruiting');
     const invited = Players._invitedIds.has(u.id);
 
     return `

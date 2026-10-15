@@ -270,7 +270,7 @@ const Auth = {
             <a href="#/team/${myTeamDetail.id}" class="card clickable embed" style="border:none;padding:12px;margin:-12px">
               <div class="team-name">${UI.esc(myTeamDetail.name)}</div>
               <div class="team-meta"><span class="track-badge ${myTeamDetail.track}">${UI.esc(myTeamDetail.track_name)}</span>
-                ${UI.statusTag(myTeamDetail.status)} <span class="tag gray">${myTeamDetail.member_count}/${myTeamDetail.max_size} 人</span></div>
+                ${UI.statusTag(myTeamDetail.status)} <span class="tag gray">${myTeamDetail.member_count} 人</span></div>
               <div class="team-topic">${UI.esc(myTeamDetail.topic_title)}</div>
             </a>
             ${myTeamDetail.my_role === 'captain' ? `<a class="btn outline sm" style="margin-top:10px" href="#/team/${myTeamDetail.id}">进入队长管理</a>` : ''}

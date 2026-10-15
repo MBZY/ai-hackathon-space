@@ -12,7 +12,8 @@ const config = {
   },
   team: {
     minSize: 1,
-    maxSize: 5,
+    // 2026-10-15 起取消人数硬性上限：3~5 人仅为推荐规模，后端不再按上限拒绝申请/邀请
+    recommendedSize: { min: 3, max: 5 },
   },
   // 管理员学号白名单（对应活动组织架构：总负责人 + 赛务 + 技术保障）
   adminStudentIds: (process.env.ADMIN_IDS || '202440025279')
